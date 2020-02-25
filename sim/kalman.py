@@ -1,5 +1,6 @@
 #! /usr/bin/python3
 import numpy as np
+from scipy import linalg
 import typing
 from typing import Callable
 
@@ -8,16 +9,14 @@ class UnscentedKalmanFilter:
 
     # TODO What's needed to seed this
     def __init__(self, mean, covariance):
-        if self.mean is not None:
+        if mean is not None:
             self.mean = mean
         else:
             raise Exception("Mean cannot be null!")
-        if self.covariance is None:
+        if covariance is None:
             self.covariance = np.eye(self.mean.ndim)
         else:
             self.covariance = covariance
-
-        self.sigma, self.Wc, self.Wm = self.gen_sigma_points()
 
 
     def gen_sigma_points(self, beta=2, alpha=0.5):
@@ -26,24 +25,19 @@ class UnscentedKalmanFilter:
         """
 
         n = self.mean.ndim
-        sigmas = np.empty(2*n+1)
-
-        kappa = 3 - mean.ndim
+        sigmas = np.zeros((2*n+1, n))
+        kappa = 3 - n
         lambda_ = (alpha ** 2) * (n + kappa) - n
-        sigma[0] = self.mean
+        sigmas[0] = self.mean
 
-        # TODO Make sure this produces column vectors and not row vectors (or
-        # vice versa)
-        # TODO Is the square root of a matrix defined elementwise, or is there
-        # an alternative def?
-        c = n + lambda_
-        for i in range(1, n+1):
-            sigma[i] = self.mean + (np.sqrt(n + lambda_)
-                         * np.sqrt(self.covariance)))[i]
+        # Because we need to take the "square root" of a matrix, there is leeway
+        # in how to define this operation. We can choose to define it in
+        # a manner where we want S*S^T to bring us back to the original matrix
+        U = linalg.cholesky((n + lambda_) * self.covariance)
 
-        for i in range(n+1, 2 * n):
-            sigma[i] = (self.mean - (np.sqrt(n + lambda_)
-                         * np.sqrt(self.covariance)))[n-i]
+        for i in range(n):
+            sigmas[i+1] = self.mean + U[i]
+            sigmas[n+i+1] = self.mean - U[i]
 
         W_0 = 1 / (2*(n + lambda_))
         Wm = np.full(2*n+1, W_0)
@@ -57,10 +51,11 @@ class UnscentedKalmanFilter:
     def predict(self):
         """TODO Document
         """
-        self.Y = self.f(self.sigma)
+        self.sigmas, self.Wc, self.Wm = self.gen_sigma_points()
+
+        self.Y = self.f(self.sigma, dt)
         self.mean = np.dot(self.Wm, self.sigma)
-        # TODO Implementing this is a little bit trickier
-        self.covariance = None
+        
 
     def update(self, measurement):
         self.Z = None
@@ -69,11 +64,14 @@ class UnscentedKalmanFilter:
         self.measurement_cov = None
         self.kalman_gain = None
         self.x += self.kalman_gain @ y
-        self.covariance -= self.kalman_gain @ self.measurement_cov
-        @ self.kalman_gain.T
+        self.covariance -= self.kalman_gain @ self.measurement_cov @ self.kalman_gain.T
 
-    def f(self, args):
+    def f(self, sigmas, dt):
         return 0
 
-    def h(self, args):
+    def h(self, dt):
         return 0
+
+
+if __name__ == "__main__":
+    ukf = UnscentedKalmanFilter(np.array([0]),None) 
