@@ -2,76 +2,123 @@
 import numpy as np
 from scipy import linalg
 import typing
+import functools
 from typing import Callable
 
+# TODO Process model
+# TODO Factor out related measurements into class
+# TODO Test against linear implementation
+# TODO Design the noise functions R - we don't a priori know the measurement
+# inaccuracies, so let's take it as the identity matrix?
 
-class UnscentedKalmanFilter:
+def compute_continuous_white_noise(process_model):
+    import sympy
+    dt, phi = sympy.symbols(r'\Delta{t} \Phi_s')
+    continuous_noise = sympy.Matrix([[0, 0, 0], [0,0,0], [0,0,1]]) * phi
+    Q = sympy.integrate(process_model * continuous_noise * process_model.T,
+                        (dt, 0, dt))
+    return Q
 
-    # TODO What's needed to seed this
-    def __init__(self, mean, covariance):
-        if mean is not None:
-            self.mean = mean
-        else:
-            raise Exception("Mean cannot be null!")
-        if covariance is None:
-            self.covariance = np.eye(self.mean.ndim)
-        else:
-            self.covariance = covariance
+def calculate_sigma_points(mu, P, alpha=0.5, beta=2.0):
+    n = mu.ndim
+    lambda_ = (alpha ** 2) * 3 - n
+    sigmas = np.zeros((2*n+1, n))
+    U = linalg.cholesky((n+lambda_)*P)
 
+    sigmas[0] = mu
+    for i in range(n):
+        sigmas[i+1]     = mu + U[i]
+        sigmas[n+i+1]   = mu - U[i]
+    return sigmas
 
-    def gen_sigma_points(self, beta=2, alpha=0.5):
-        """Generate the Van der Waals' sigma points, mean and covariance weights
-        for the current system mean and covariance.
-        """
+def calculate_weights(n, alpha=0.5, beta=2.0):
+    lambda_ = (alpha ** 2) * 3 - n
 
-        n = self.mean.ndim
-        sigmas = np.zeros((2*n+1, n))
-        kappa = 3 - n
-        lambda_ = (alpha ** 2) * (n + kappa) - n
-        sigmas[0] = self.mean
+    W_0 = 1.0/(2 * (n + lambda_))
+    Wc = np.full(2*n + 1, W_0)
+    Wm = np.full(2*n + 1, W_0)
+    Wc[0] = lambda_ / (n + lambda_) + (1.0 - alpha ** 2 + beta)
+    Wm[0] = lambda_ / (n + lambda_)
 
-        # Because we need to take the "square root" of a matrix, there is leeway
-        # in how to define this operation. We can choose to define it in
-        # a manner where we want S*S^T to bring us back to the original matrix
-        U = linalg.cholesky((n + lambda_) * self.covariance)
+    return (Wc, Wm)
 
-        for i in range(n):
-            sigmas[i+1] = self.mean + U[i]
-            sigmas[n+i+1] = self.mean - U[i]
+# Individually pass the sigma points through the fn
+# Note that sigmas should be refreshed with every predict
 
-        W_0 = 1 / (2*(n + lambda_))
-        Wm = np.full(2*n+1, W_0)
-        Wc = np.full(2*n+1, W_0)
-        Wc[0] = Wc[0] + 1 - alpha ** 2 + beta
-        Wm[0] = lambda_ / (n + lambda_)
+def fx(sigma, dt, **args):
+    return 0
 
-        return (sigmas, Wc, Wm)
-
-
-    def predict(self):
-        """TODO Document
-        """
-        self.sigmas, self.Wc, self.Wm = self.gen_sigma_points()
-
-        self.Y = self.f(self.sigma, dt)
-        self.mean = np.dot(self.Wm, self.sigma)
-        
-
-    def update(self, measurement):
-        self.Z = None
-        self.mean_z = None
-        y = measurement - self.mean_z
-        self.measurement_cov = None
-        self.kalman_gain = None
-        self.x += self.kalman_gain @ y
-        self.covariance -= self.kalman_gain @ self.measurement_cov @ self.kalman_gain.T
-
-    def f(self, sigmas, dt):
-        return 0
-
-    def h(self, dt):
-        return 0
+def hx(sigma, **args):
+    return 0
 
 
-if __name__ == "__main__":
-    ukf = UnscentedKalmanFilter(np.array([0]),None) 
+def predict(mu, P, Wm, Wc, Q):
+    n = mu.ndim
+    sigmas = calculate_sigma_points(mu, P)
+    Wc, Wm = calculate_weights(n)
+
+    f_sigmas = []
+    for i in range(n):
+        f_sigmas[i] = prediction_ut(sigmas, Wm, Wc, Q)
+
+    x_prior, P_prior = prediction_ut(f_sigmas, Wm, Wc, Q)
+
+    return (x_prior, P_prior, sigmas, Wc, Wm)
+
+def update(z, x_prior, P_prior, f_sigmas, Wc, Wm, R):
+    n = x_prior.ndim
+    h_sigmas = []
+
+    for i in range(n):
+        h_sigmas[i] = hx(f_sigmas[i])
+
+    z_prior, Pz = measurement_ut(h_sigmas, Wm, Wc, R)
+
+    Pxz = np.zeros((n, z.ndim))
+    for i in range(n):
+        Pxz += Wc[i] * np.outer(f_sigmas[i] - x_prior, h_sigmas[i] - z_prior)
+
+    K = np.dot(Pxz, np.inv(Pz))
+    x = x_prior + np.dot(K, z - z_prior)
+    P = P_prior - np.dot(K, Pz).dot(K.T)
+    return (x, P)
+
+def unscented_transform(sigmas: np.ndarray, Wm: np.ndarray, Wc: np.ndarray,
+                        mean_function: Callable[np.ndarray, np.ndarray],
+                        residual_function: Callable[np.ndarray, np.ndarray]):
+    k, n = sigmas.shape
+
+    # TODO Check which row of this is the angle and then normalize
+    x = np.zeros(n)
+    x = mean_function(sigmas, Wm)
+
+    P = np.zeros((n, n))
+    for i in range(k):
+        y = residual_function(sigmas[k], x)
+        P += Wc[i] * np.outer(y, y)
+
+    return (x, P)
+
+def prediction_average(sigma, Wm):
+    pass
+
+def prediction_residual(sigma, Wm):
+    pass
+
+def measurement_average(sigma, Wm):
+    pass
+
+def measurement_residual(sigma, Wm):
+    pass
+
+prediction_ut = functools.partial(unscented_transform,
+                                  mean_function=prediction_average,
+                                  residual_function=prediction_residual)
+
+measurement_ut = functools.partial(unscented_transform,
+                                   mean_function=measurement_residual,
+                                   residual_function=measurement_residual)
+
+# Normalizing angles to the [0, 2pi] range
+def normalize_angle(x):
+    return x % (2 * np.pi)

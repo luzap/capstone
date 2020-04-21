@@ -24,7 +24,6 @@ def geodetic_to_ECEF(lat, long, h):
     return (x, y, z)
 
 def ECEF_to_geodetic(x: float, y: float, z: float):
-
     # Transformation of Cartesian to Geodetic Coordinates without Iterations
     r = np.sqrt(np.square(x) + np.square(y) + np.square(z))
     E = np.sqrt(np.square(a) - np.square(b))
