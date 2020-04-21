@@ -26,13 +26,13 @@ class Vehicle2D:
         self.dt = dt
         self.current_time = 0
         self.controls = []
+        # TODO Do I need to add an error distribution for the measurements?
 
     def move(self):
         """Iterate the model through a single iteration. Note that we had to
         slightly modify the model that we were initially working with, as it
         interpreted movement along a straight line as degenerate behavior.
         """
-
         self.state += np.array([self.vel * np.cos(self.state[2]) * self.dt,
                                 self.vel * np.sin(self.state[2]) * self.dt,
                                 0.0])

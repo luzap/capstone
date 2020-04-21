@@ -12,6 +12,25 @@ from typing import Callable
 # inaccuracies, so let's take it as the identity matrix?
 
 def compute_continuous_white_noise(process_model):
+    """We are taking the white noise that characterises the error in the model
+    to be of a continous variety. Since we have no empirical derivation of the
+    error, we shall instead follow a theoretical one, wherein the discrete-time
+    white noise model can be given by the integral Q = \int_0^{\Delta t} f(t)
+    Q_c f(t)^T \dd t, where Q_c is the continuous time noise and f(t) is our
+    process model.
+
+    Via some theory of stochastic processes, we know that we can approximate Q_c
+    with the following nxn matrix
+                        [0   ...    0  ]
+                        [... ...   ... ]
+                        [0   ... \Phi_s],
+    where \Phi_s is the spectral density of the white noise. To get this, we
+    shall simply evaluate the integral at the given time and use the given
+    matrix.
+
+    In practice, we often don't know the spectral noise of the problem, so it
+    becomes an issue of fine-tuning, which we can also try to do.
+    """
     import sympy
     dt, phi = sympy.symbols(r'\Delta{t} \Phi_s')
     continuous_noise = sympy.Matrix([[0, 0, 0], [0,0,0], [0,0,1]]) * phi
