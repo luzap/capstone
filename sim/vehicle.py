@@ -13,7 +13,8 @@ class Vehicle2D:
     """
 
     def __init__(self, x: float, y: float, bearing: float,
-                 vel: Callable[float], ang_vel: Callable[float], dt: float = 0.01):
+                 vel: Callable[[float], float], ang_vel: Callable[[float], float],
+                 dt: float = 0.01):
         self.state = np.array([float(x), float(y), float(bearing)])
         self.vel = vel
         self.ang_vel = ang_vel
@@ -45,9 +46,9 @@ class Vehicle2D:
 class Vehicle3D:
 
     def __init__(self, x: float, y: float, z: float, theta: float, beta: float,
-                 alpha: float, vel: Callable[float],
-                 yaw: Callable[float], pitch: Callable[float],
-                 roll: Callable[float], dt: float = 0.01):
+                 alpha: float, vel: Callable[[float], float],
+                 yaw: Callable[[float], float], pitch: Callable[[float], float],
+                 roll: Callable[[float], float], dt: float = 0.01):
         self.state = np.array([x, y, z, theta, beta, alpha])
         self.current_time = 0
         self.dt = dt
