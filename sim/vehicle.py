@@ -4,10 +4,8 @@ from typing import List
 from collections import namedtuple
 
 class Actions:
-    STOP = 0
-    SLOW = 1
-    SPEED = 2
-    TURN = 3
+    SPEED = 0
+    TURN = 1
 
 action = namedtuple("action", "time action change duration")
 
@@ -26,6 +24,7 @@ class Vehicle2D:
         self.dt = dt
         self.current_time = 0
         self.controls = []
+        self.change = {index: 0}
         # TODO Do I need to add an error distribution for the measurements?
 
     def move(self):
@@ -61,8 +60,8 @@ class Vehicle2D:
                 getattr(Actions, parts[1]),
                 float(parts[2]),
                 float(parts[3]))
-            # It's a little more convenient to have any turning be expressed 
-            # in radians than in degrees, but it's much simpler to specify 
+            # It's a little more convenient to have any turning be expressed
+            # in radians than in degrees, but it's much simpler to specify
             # them in degrees
             if current_control.action == Actions.TURN:
                 current_control = action(current_control.time,
@@ -79,14 +78,28 @@ class Vehicle2D:
         prior instructions. If no instructions are given, the vehicle will
         move from left to right by one velocity unit until the simulation stops.
         """
-        next_event = len(self.controls) and \
-                self.controls[0].time == self.current_time
-        # TODO Add event handling
 
+        if self.controls[0].time == self.current_time:
+            self.current_action = self.controls.pop(0)
+            data_points = self.current_time - self.current_action.duration
+
+
+            if self.current_action.action == Actions.STOP:
+                # TODO What is the right abstraction here?
+                self.change['vel'] = np.linspace(self.vel,
+                                                 self.current_action.change,
+                                                 data_points)
+
+            if self.current_action.action == Actions.TURN:
+                pass
+        
 
         # If there are no events to speak of, continue
         self.move()
         self.current_time += self.dt
 
 
+class Vehicle3D:
 
+    def __init__(self, x: float, y:float, z:float, args):
+        pass
