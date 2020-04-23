@@ -1,5 +1,7 @@
 #! /usr/bin/python3
 import numpy as np
+import matplotlib.pyplot as plt
+import matplotlib.animation
 from typing import List, Callable
 from collections import namedtuple
 
@@ -35,12 +37,46 @@ class Vehicle2D:
 
         self.state = self.state +  translational_velocity * dt + angular_velocity * dt
 
+    # TODO We could make this a little bit more transparent
     def __next__(self):
         """For the sake of simplicity, every vehicle is an iterator, and each
         iteration advances the timestamp by a given degree.
         """
         self.__move()
         self.current_time += self.dt
+
+def animate_2d(length: int, vel: Callable[[float], float], ang_vel:
+               Callable[[float], float]):
+    fig, axes = plt.subplots(2, 1)
+    axes[0].grid()
+
+    v = Vehicle2D(0, 0, 0, vel, ang_vel)
+    # ax.plot returns a list, which is why the destructuring is necessary
+    veh_line = axes[0].plot(v.state[0], v.state[1], 'o-', lw=2)[0]
+    ang_line =  axes[1].plot(v.state[2], v.current_time, 'b-', lw=2)[0]
+
+    for axis in axes:
+        axis.set_xlim(0, length)
+    # TODO Add axes names and plot names 
+    axes[1].set_ylim(0, 2*np.pi)
+
+    veh_path = np.zeros((length * 100, 2))
+    ang_path = np.zeros((length * 100, 2))
+
+    def animate(frame):
+        next(v)
+        veh_path[frame] = v.state[0:2]
+        ang_path[frame] = np.array([v.current_time, v.state[2]])
+
+        veh_line.set_data(veh_path[:, 0], veh_path[:, 1])
+        ang_line.set_data(ang_path[:, 0], ang_path[:, 1])
+        return veh_line, ang_line
+
+    # TODO Add optional delay parameter
+    _ = matplotlib.animation.FuncAnimation(fig, animate, frames=length*100,
+                                           interval=0.1, repeat=False, blit=True)
+    plt.show()
+
 
 
 class Vehicle3D:
