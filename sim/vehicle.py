@@ -11,13 +11,22 @@ class Vehicle2D:
     two functions, ```vel``` and ```ang_vel```, which determine the velocities
     at a given point in time.
 
-    TODO Consider adding an error term to the position upon every iteration
+    TODO Add an error term after every iteration. The result given by move will
+    be the "true" position, with some error
+    TODO Add a Kalman filter that's tracking its own path, given the precise
+    controls between two points.
+    TODO Add Kalman filters that take inputs from one other vehicle
     """
 
     def __init__(self, x: float, y: float, bearing: float,
                  vel: Callable[[float], float], ang_vel: Callable[[float], float],
                  dt: float = 0.01):
+        # TODO Let this be the "GPS" position, where we will add a little
+        # error every iterations
         self.state = np.array([float(x), float(y), float(bearing)])
+        # TODO This is the Kalman derived position that the vehicle keeps for
+        # itself given IMU data, so we need to hook up the Kalman filter
+        self.relative_state = self.state.copy()
         self.vel = vel
         self.ang_vel = ang_vel
         self.dt = dt
@@ -57,7 +66,7 @@ def animate_2d(length: int, vel: Callable[[float], float], ang_vel:
 
     for axis in axes:
         axis.set_xlim(0, length)
-    # TODO Add axes names and plot names 
+    # TODO Add axes names and plot names
     axes[1].set_ylim(0, 2*np.pi)
 
     veh_path = np.zeros((length * 100, 2))

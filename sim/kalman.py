@@ -70,54 +70,92 @@ def fx(sigma, dt, **args):
 def hx(sigma, **args):
     return 0
 
+class UKFilter:
 
-def predict(mu, P, Wm, Wc, Q):
-    n = mu.ndim
-    sigmas = calculate_sigma_points(mu, P)
-    Wc, Wm = calculate_weights(n)
+    def __init__(self, mu, P, Q, R):
+        # State variables
+        self.mu = mu
+        self.P = P
+        self.Q = Q
 
-    f_sigmas = []
-    for i in range(n):
-        f_sigmas[i] = prediction_ut(sigmas, Wm, Wc, Q)
+        # Measurement variables
+        self.R = R
 
-    x_prior, P_prior = prediction_ut(f_sigmas, Wm, Wc, Q)
+        # Sigmas
+        self.sigmas = None
+        self.f_sigmas = []
+        self.h_sigmas = []
 
-    return (x_prior, P_prior, sigmas, Wc, Wm)
+        # Priors: after the update, mu and P become the posteriors
+        self.x_prior = None
+        self.P_prior = None
 
-def update(z, x_prior, P_prior, f_sigmas, Wc, Wm, R):
-    n = x_prior.ndim
-    h_sigmas = []
+        # These are independent of the current mean, so we can calculate them
+        # once
+        self.Wc, self.Wm = calculate_weights(self.mu.ndim)
 
-    for i in range(n):
-        h_sigmas[i] = hx(f_sigmas[i])
+    def predict(self):
+        n = self.mu.ndim
+        self.sigmas = calculate_sigma_points(self.mu, self.P)
 
-    z_prior, Pz = measurement_ut(h_sigmas, Wm, Wc, R)
+        self.f_sigmas = []
+        for i in range(n):
+            self.f_sigmas[i] = prediction_ut(self.sigmas,
+                                             self.Wm,
+                                             self.Wc,
+                                             self.Q)
 
-    Pxz = np.zeros((n, z.ndim))
-    for i in range(n):
-        Pxz += Wc[i] * np.outer(f_sigmas[i] - x_prior, h_sigmas[i] - z_prior)
+        self.x_prior, self.P_prior = prediction_ut(self.f_sigmas,
+                                                   self.Wm, self.Wc,
+                                                   self.Q)
 
-    K = np.dot(Pxz, np.inv(Pz))
-    x = x_prior + np.dot(K, z - z_prior)
-    P = P_prior - np.dot(K, Pz).dot(K.T)
-    return (x, P)
+        return (self.x_prior, self.P_prior)
 
-def unscented_transform(sigmas: np.ndarray, Wm: np.ndarray, Wc: np.ndarray,
-                        mean_function: Callable[np.ndarray, np.ndarray],
-                        residual_function: Callable[np.ndarray, np.ndarray]):
-    k, n = sigmas.shape
+    def update(self, z):
+        n = self.x_prior.ndim
+        self.h_sigmas = []
 
-    # TODO Check which row of this is the angle and then normalize
-    x = np.zeros(n)
-    x = mean_function(sigmas, Wm)
+        for i in range(n):
+            self.h_sigmas[i] = hx(self.f_sigmas[i])
 
-    P = np.zeros((n, n))
-    for i in range(k):
-        y = residual_function(sigmas[k], x)
-        P += Wc[i] * np.outer(y, y)
+        z_prior, Pz = measurement_ut(self.h_sigmas,
+                                     self.Wm,
+                                     self.Wc,
+                                     self.R)
 
-    return (x, P)
+        Pxz = np.zeros((n, z.ndim))
+        for i in range(n):
+            Pxz += self.Wc[i] * np.outer(self.f_sigmas[i] - self.x_prior,
+                                         self.h_sigmas[i] - z_prior)
 
+
+        K = np.dot(Pxz, np.inv(Pz))
+        self.mu = self.x_prior + np.dot(K, z - z_prior)
+        self.P = self.P_prior - np.dot(K, Pz).dot(K.T)
+        return (self.mu, self.P)
+
+
+    @classmethod
+    def unscented_transform(sigmas: np.ndarray, Wm: np.ndarray, Wc: np.ndarray,
+                            mean_function: Callable[np.ndarray, np.ndarray],
+                            residual_function: Callable[np.ndarray, np.ndarray]):
+        k, n = sigmas.shape
+
+        # TODO Check which row of this is the angle and then normalize
+        x = np.zeros(n)
+        x = mean_function(sigmas, Wm)
+
+        P = np.zeros((n, n))
+        for i in range(k):
+            y = residual_function(sigmas[k], x)
+            P += Wc[i] * np.outer(y, y)
+
+        return (x, P)
+
+
+
+# TODO The structure we are going for is [x y v \theta \dot{\theta}], so only
+# the only the last column needs any angle correction
 def prediction_average(sigma, Wm):
     pass
 
