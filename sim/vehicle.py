@@ -31,18 +31,28 @@ class Vehicle2D:
         self.ang_vel = ang_vel
         self.dt = dt
         self.current_time = 0
+        self.epsilon = np.random.normal(0.0, scale=1.0)
 
+    # TODO Alternatively, we can place objects arbitrarily far away, and then
+    # change the reference objects later (should experiment with that)
     def __move(self):
         """Iterate the model through a single iteration. Note that we had to
         slightly modify the model that we were initially working with, as it
         interpreted movement along a straight line as degenerate behavior.
         """
+        #
+        e_v = np.random.normal(0.0, scale=0.05)
+        # The idea of having a very small angular error makes sense considering
+        # that for most vehicles, their direction of motion is a lot more
+        # diffucult to change than the speed of motion, so we assume low
+        # variability.
+        e_a = np.random.normal(0.0, scale=0.01)
         t = self.current_time
         dt = self.dt
-        translational_velocity = self.vel(t) * np.array([np.cos(self.state[2]),
+        translational_velocity = (self.vel(t) + e_v) * np.array([np.cos(self.state[2]),
                                                          np.sin(self.state[2]),
                                                          0])
-        angular_velocity = self.ang_vel(t) * np.array([0, 0, 1])
+        angular_velocity = (self.ang_vel(t) + e_a)  * np.array([0, 0, 1])
 
         self.state = self.state +  translational_velocity * dt + angular_velocity * dt
 

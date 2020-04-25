@@ -2,43 +2,13 @@
 import numpy as np
 from scipy import linalg
 import typing
-import functools
 from typing import Callable
 
-# TODO Process model
-# TODO Factor out related measurements into class
 # TODO Test against linear implementation
-# TODO Design the noise functions R - we don't a priori know the measurement
-# inaccuracies, so let's take it as the identity matrix?
-
-def compute_continuous_white_noise(process_model):
-    """We are taking the white noise that characterises the error in the model
-    to be of a continous variety. Since we have no empirical derivation of the
-    error, we shall instead follow a theoretical one, wherein the discrete-time
-    white noise model can be given by the integral Q = \int_0^{\Delta t} f(t)
-    Q_c f(t)^T \dd t, where Q_c is the continuous time noise and f(t) is our
-    process model.
-
-    Via some theory of stochastic processes, we know that we can approximate Q_c
-    with the following nxn matrix
-                        [0   ...    0  ]
-                        [... ...   ... ]
-                        [0   ... \Phi_s],
-    where \Phi_s is the spectral density of the white noise. To get this, we
-    shall simply evaluate the integral at the given time and use the given
-    matrix.
-
-    In practice, we often don't know the spectral noise of the problem, so it
-    becomes an issue of fine-tuning, which we can also try to do.
-    """
-    import sympy
-    dt, phi = sympy.symbols(r'\Delta{t} \Phi_s')
-    continuous_noise = sympy.Matrix([[0, 0, 0], [0,0,0], [0,0,1]]) * phi
-    Q = sympy.integrate(process_model * continuous_noise * process_model.T,
-                        (dt, 0, dt))
-    return Q
 
 def calculate_sigma_points(mu, P, alpha=0.5, beta=2.0):
+    """Calculate the van der Waal sigma points based on the state mean and
+    covariance."""
     n = mu.ndim
     lambda_ = (alpha ** 2) * 3 - n
     sigmas = np.zeros((2*n+1, n))
@@ -72,14 +42,23 @@ def hx(sigma, **args):
 
 class UKFilter:
 
-    def __init__(self, mu, P, Q, R):
+    def __init__(self, mu, P, Q, R, state_mean, state_residual,
+                measurement_mean, measurement_residual):
         # State variables
         self.mu = mu
         self.P = P
         self.Q = Q
 
+        # State functions
+        self.state_mean = state_mean
+        self.state_res = state_residual
+
         # Measurement variables
         self.R = R
+
+        # Measurement functions
+        self.meas_mean = measurement_mean
+        self.meas_res = measurement_residual
 
         # Sigmas
         self.sigmas = None
@@ -100,14 +79,15 @@ class UKFilter:
 
         self.f_sigmas = []
         for i in range(n):
-            self.f_sigmas[i] = prediction_ut(self.sigmas,
-                                             self.Wm,
-                                             self.Wc,
-                                             self.Q)
+            self.f_sigmas[i] = self.unscented_transform(self.sigmas,
+                                                        self.Q,
+                                                        self.state_mean,
+                                                        self.state_res)
 
-        self.x_prior, self.P_prior = prediction_ut(self.f_sigmas,
-                                                   self.Wm, self.Wc,
-                                                   self.Q)
+        self.x_prior, self.P_prior = self.unscented_transform(self.f_sigmas,
+                                                              self.Q,
+                                                              self.state_mean,
+                                                              self.state_res)
 
         return (self.x_prior, self.P_prior)
 
@@ -118,40 +98,37 @@ class UKFilter:
         for i in range(n):
             self.h_sigmas[i] = hx(self.f_sigmas[i])
 
-        z_prior, Pz = measurement_ut(self.h_sigmas,
-                                     self.Wm,
-                                     self.Wc,
-                                     self.R)
+        z_prior, Pz = self.unscented_transform(self.h_sigmas,
+                                               self.R,
+                                               self.meas_mean,
+                                               self.meas_res)
 
         Pxz = np.zeros((n, z.ndim))
         for i in range(n):
             Pxz += self.Wc[i] * np.outer(self.f_sigmas[i] - self.x_prior,
                                          self.h_sigmas[i] - z_prior)
 
-
         K = np.dot(Pxz, np.inv(Pz))
         self.mu = self.x_prior + np.dot(K, z - z_prior)
         self.P = self.P_prior - np.dot(K, Pz).dot(K.T)
         return (self.mu, self.P)
 
-
-    @classmethod
-    def unscented_transform(sigmas: np.ndarray, Wm: np.ndarray, Wc: np.ndarray,
-                            mean_function: Callable[np.ndarray, np.ndarray],
-                            residual_function: Callable[np.ndarray, np.ndarray]):
+    def unscented_transform(self, sigmas: np.ndarray, Q: np.ndarray,
+                            mean_func: Callable[[np.ndarray], np.ndarray],
+                            residual_func: Callable[[np.ndarray], np.ndarray]):
         k, n = sigmas.shape
 
         # TODO Check which row of this is the angle and then normalize
         x = np.zeros(n)
-        x = mean_function(sigmas, Wm)
+        x = mean_func(sigmas, self.Wm)
 
         P = np.zeros((n, n))
         for i in range(k):
-            y = residual_function(sigmas[k], x)
-            P += Wc[i] * np.outer(y, y)
+            y = residual_func(sigmas[k], x)
+            P += self.Wc[i] * np.outer(y, y)
+        P += Q
 
         return (x, P)
-
 
 
 # TODO The structure we are going for is [x y v \theta \dot{\theta}], so only
@@ -167,14 +144,6 @@ def measurement_average(sigma, Wm):
 
 def measurement_residual(sigma, Wm):
     pass
-
-prediction_ut = functools.partial(unscented_transform,
-                                  mean_function=prediction_average,
-                                  residual_function=prediction_residual)
-
-measurement_ut = functools.partial(unscented_transform,
-                                   mean_function=measurement_residual,
-                                   residual_function=measurement_residual)
 
 # Normalizing angles to the [0, 2pi] range
 def normalize_angle(x):
