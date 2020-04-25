@@ -31,25 +31,20 @@ def calculate_weights(n, alpha=0.5, beta=2.0):
 
     return (Wc, Wm)
 
-# Individually pass the sigma points through the fn
-# Note that sigmas should be refreshed with every predict
-
-def fx(sigma, dt, **args):
-    return 0
-
-def hx(sigma, **args):
-    return 0
 
 class UKFilter:
-
-    def __init__(self, mu, P, Q, R, state_mean, state_residual,
-                measurement_mean, measurement_residual):
+    # TODO Set timestep
+    # TODO Add type annotations
+    def __init__(self, mu, P, Q, R, dt, process_model, measurement_function,
+                 state_mean, state_residual, measurement_mean, measurement_residual):
         # State variables
         self.mu = mu
         self.P = P
         self.Q = Q
+        self.dt = dt
 
         # State functions
+        self.process_model = process_model
         self.state_mean = state_mean
         self.state_res = state_residual
 
@@ -57,6 +52,7 @@ class UKFilter:
         self.R = R
 
         # Measurement functions
+        self.measurement = measurement_function
         self.meas_mean = measurement_mean
         self.meas_res = measurement_residual
 
@@ -74,15 +70,11 @@ class UKFilter:
         self.Wc, self.Wm = calculate_weights(self.mu.ndim)
 
     def predict(self):
-        n = self.mu.ndim
         self.sigmas = calculate_sigma_points(self.mu, self.P)
 
         self.f_sigmas = []
-        for i in range(n):
-            self.f_sigmas[i] = self.unscented_transform(self.sigmas,
-                                                        self.Q,
-                                                        self.state_mean,
-                                                        self.state_res)
+        for i, sigma in enumerate(self.sigmas):
+            self.f_sigmas[i] = self.process_model(sigma, self.dt)
 
         self.x_prior, self.P_prior = self.unscented_transform(self.f_sigmas,
                                                               self.Q,
@@ -95,12 +87,10 @@ class UKFilter:
         n = self.x_prior.ndim
         self.h_sigmas = []
 
-        for i in range(n):
-            self.h_sigmas[i] = hx(self.f_sigmas[i])
+        for i, f_sigma in enumerate(self.f_sigmas):
+            self.h_sigmas[i] = self.measurement(f_sigma)
 
-        z_prior, Pz = self.unscented_transform(self.h_sigmas,
-                                               self.R,
-                                               self.meas_mean,
+        z_prior, Pz = self.unscented_transform(self.h_sigmas, self.R, self.meas_mean,
                                                self.meas_res)
 
         Pxz = np.zeros((n, z.ndim))
