@@ -32,6 +32,7 @@ def calculate_weights(n, alpha=0.5, beta=2.0):
 
 class UKFilter:
     # TODO Add type annotations
+    # TODO Clear up inconsistent naming
     def __init__(self, mu, P, Q, R, dt, process_model, measurement_function,
                  state_mean, state_residual, measurement_mean, measurement_residual):
         # State variables
@@ -103,7 +104,7 @@ class UKFilter:
 
         self.mu = self.x_prior + K @ y
         self.P = self.P_prior - K @ Pz @ K.T
-        print("P\n", self.P)
+        return (self.mu, self.P)
 
     def unscented_transform(self, sigmas: np.ndarray, Q: np.ndarray,
                             mean_func: Callable[[np.ndarray], np.ndarray],

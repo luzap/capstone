@@ -5,96 +5,69 @@ import matplotlib.animation
 from typing import List, Callable
 from collections import namedtuple
 
-class Vehicle2D:
-    """An idealized vehicle model, assuming the vehicle is a point in 2D space
-    and is perfectly aware of its location. To drive this vehicle, you specify
-    two functions, ```vel``` and ```ang_vel```, which determine the velocities
-    at a given point in time.
+def vehicle_2d_process_model(x0, dt, vel: float, ang_vel: float, use_noise: bool
+                             = False):
+        # TODO Figure out sensible error values based on the velocity
+        e_v = np.random.normal(0.0, scale=0.05) if not use_noise else 1.0
+        e_a = np.random.normal(0.0, scale=0.01) if not use_noise else 1.0
+        translational_velocity = (vel * e_v) * np.array([np.cos(x0[2]),
+                                                         np.sin(x0[2]),
+                                                         0
+                                                        ])
+        angular_velocity = (ang_vel * e_a)  * np.array([0, 0, 1])
 
-    TODO Add an error term after every iteration. The result given by move will
-    be the "true" position, with some error
-    TODO Add a Kalman filter that's tracking its own path, given the precise
-    controls between two points.
-    TODO Add Kalman filters that take inputs from one other vehicle
-    """
+        return x0 + translational_velocity * dt + angular_velocity * dt
 
-    def __init__(self, x: float, y: float, bearing: float,
-                 vel: Callable[[float], float], ang_vel: Callable[[float], float],
-                 dt: float = 0.01):
-        # TODO Let this be the "GPS" position, where we will add a little
-        # error every iterations
-        self.state = np.array([float(x), float(y), float(bearing)])
-        # TODO This is the Kalman derived position that the vehicle keeps for
-        # itself given IMU data, so we need to hook up the Kalman filter
-        self.relative_state = self.state.copy()
-        self.vel = vel
-        self.ang_vel = ang_vel
-        self.dt = dt
-        self.current_time = 0
-        self.epsilon = np.random.normal(0.0, scale=1.0)
 
-    # TODO Alternatively, we can place objects arbitrarily far away, and then
-    # change the reference objects later (should experiment with that)
-    def __move(self):
-        """Iterate the model through a single iteration. Note that we had to
-        slightly modify the model that we were initially working with, as it
-        interpreted movement along a straight line as degenerate behavior.
-        """
-        #
-        e_v = np.random.normal(0.0, scale=0.05)
-        # The idea of having a very small angular error makes sense considering
-        # that for most vehicles, their direction of motion is a lot more
-        # diffucult to change than the speed of motion, so we assume low
-        # variability.
-        e_a = np.random.normal(0.0, scale=0.01)
-        t = self.current_time
-        dt = self.dt
-        translational_velocity = (self.vel(t) + e_v) * np.array([np.cos(self.state[2]),
-                                                         np.sin(self.state[2]),
-                                                         0])
-        angular_velocity = (self.ang_vel(t) + e_a)  * np.array([0, 0, 1])
-
-        self.state = self.state +  translational_velocity * dt + angular_velocity * dt
-
-    # TODO We could make this a little bit more transparent
-    def __next__(self):
-        """For the sake of simplicity, every vehicle is an iterator, and each
-        iteration advances the timestamp by a given degree.
-        """
-        self.__move()
-        self.current_time += self.dt
-
-def animate_2d(length: int, vel: Callable[[float], float], ang_vel:
+def animate_2d(length: int,
+               vel: Callable[[float], float], ang_vel:
                Callable[[float], float]):
-    fig, axes = plt.subplots(2, 1)
+    # TODO Need plot for position and angle, then for residuals of angle
+    # and residuals of position
+    fig, axes = plt.subplots(2, 2)
     axes[0].grid()
 
-    v = Vehicle2D(0, 0, 0, vel, ang_vel)
-    # ax.plot returns a list, which is why the destructuring is necessary
-    veh_line = axes[0].plot(v.state[0], v.state[1], 'o-', lw=2)[0]
-    ang_line =  axes[1].plot(v.state[2], v.current_time, 'b-', lw=2)[0]
+    # TODO Initialize random start positions w/
 
-    for axis in axes:
-        axis.set_xlim(0, length)
-    # TODO Add axes names and plot names
-    axes[1].set_ylim(0, 2*np.pi)
 
-    veh_path = np.zeros((length * 100, 2))
-    ang_path = np.zeros((length * 100, 2))
+    # # ax.plot returns a list, which is why the destructuring is necessary
+    # veh_line = axes[0].plot(v.state[0], v.state[1], 'o-', lw=2)[0]
+    # ang_line =  axes[1].plot(v.state[2], v.current_time, 'b-', lw=2)[0]
 
-    def animate(frame):
-        next(v)
-        veh_path[frame] = v.state[0:2]
-        ang_path[frame] = np.array([v.current_time, v.state[2]])
+    # for axis in axes:
+    #     axis.set_xlim(0, length)
+    # # TODO Add axes names and plot names
+    # axes[1].set_ylim(0, 2*np.pi)
 
-        veh_line.set_data(veh_path[:, 0], veh_path[:, 1])
-        ang_line.set_data(ang_path[:, 0], ang_path[:, 1])
-        return veh_line, ang_line
+    # veh_path = np.zeros((length * 100, 2))
+    # ang_path = np.zeros((length * 100, 2))
 
-    # TODO Add optional delay parameter
-    _ = matplotlib.animation.FuncAnimation(fig, animate, frames=length*100,
-                                           interval=0.1, repeat=False, blit=True)
-    plt.show()
+    # def animate(frame):
+    #     next(v)
+    #     veh_path[frame] = v.state[0:2]
+    #     ang_path[frame] = np.array([v.current_time, v.state[2]])
+
+    #     veh_line.set_data(veh_path[:, 0], veh_path[:, 1])
+    #     ang_line.set_data(ang_path[:, 0], ang_path[:, 1])
+    #     return veh_line, ang_line
+
+    # # TODO Add optional delay parameter
+    # _ = matplotlib.animation.FuncAnimation(fig, animate, frames=length*100,
+    #                                        interval=0.1, repeat=False, blit=True)
+    # plt.show()
+
+
+
+def vehicle_3d_process_model(x, dt, vel, yaw, pitch, roll):
+    dx = vel * np.array([np.cos(x[3]) * np.cos(x[4]),
+                         np.sin(x[3]) * np.cos(x[4]),
+                         np.sin(x[3]), 0, 0, 0])
+    dtheta = yaw * np.array([0, 0, 0, 1, 0, 0])
+    dbeta = pitch * np.array([0, 0, 0, 0, 1, 0])
+    dalpha = roll * np.array([0, 0, 0, 0, 0, 1])
+
+    return (dx + dtheta + dbeta + dalpha) * dt
+
 
 
 
@@ -112,19 +85,6 @@ class Vehicle3D:
         self.pitch = pitch
         self.roll = roll
 
-    def __move(self):
-        t = self.current_time
-        dt = self.dt
-        st = self.state
-
-        dx = self.vel(t) * np.array([np.cos(st[3]) * np.cos(st[4]),
-                                     np.sin(st[3]) * np.cos(st[4]),
-                                     np.sin(st[3]), 0, 0, 0])
-        dtheta = self.yaw(t) * np.array([0, 0, 0, 1, 0, 0])
-        dbeta = self.pitch(t) * np.array([0, 0, 0, 0, 1, 0])
-        dalpha = self.roll(t) * np.array([0, 0, 0, 0, 0, 1])
-
-        self.state = (dx + dtheta + dbeta + dalpha) * dt
 
     def __next__(self):
         self.__move()
