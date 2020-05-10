@@ -62,7 +62,7 @@ class UKFilter:
         # once
         self.Wc, self.Wm = calculate_weights(self.mu.shape[0])
 
-    def predict(self):
+    def predict(self, *args):
         # Create the sigma points dependent on the current mean
         self.sigmas = calculate_sigma_points(self.mu, self.P)
 
@@ -70,7 +70,7 @@ class UKFilter:
         # the current mean and covariance
         self.f_sigmas = np.zeros((len(self.sigmas), len(self.mu)))
         for i, sigma in enumerate(self.sigmas):
-            self.f_sigmas[i] = self.process_model(sigma, self.dt)
+            self.f_sigmas[i] = self.process_model(sigma, self.dt, *args)
 
         self.x_prior, self.P_prior = self.unscented_transform(self.f_sigmas,
                                                               self.Q,
@@ -78,14 +78,14 @@ class UKFilter:
                                                               self.state_res)
         return (self.x_prior, self.P_prior)
 
-    def update(self, z):
+    def update(self, z, *args):
         if np.isscalar(z):
             z = np.array([z])
 
         # pylint: disable=E1136
         h_sigmas = np.zeros((self.f_sigmas.shape[0], len(z)))
         for i, f_sigma in enumerate(self.f_sigmas):
-            h_sigmas[i] = self.measurement(f_sigma)
+            h_sigmas[i] = self.measurement(f_sigma, *args)
         print(h_sigmas)
 
         z_prior, Pz = self.unscented_transform(h_sigmas, self.R, self.meas_mean,
@@ -120,9 +120,6 @@ class UKFilter:
         P += Q
 
         return (x, P)
-
-# TODO The structure we are going for is [x y v \theta \dot{\theta}], so only
-# the only the last column needs any angle correction
 
 # Normalizing angles to the [0, 2pi] range
 def normalize_angle(x):

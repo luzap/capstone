@@ -1,5 +1,7 @@
-#! /usr/bin/python3
+#!/usr/bin/python3
 import numpy as np
+import sympy
+import scipy.optimize as scio
 import matplotlib.pyplot as plt
 import scipy.stats as st
 
@@ -12,16 +14,69 @@ def get_data(mu, Sigma, sample_num=10000):
         sums[i] = np.dot(sample, sample.T)
     return sums
 
-if __name__ == "__main__":
-    data = get_data(np.array([0, 0]), np.array([[1, 0], [0, 1]]))
-    bin_heights, bin_borders = np.histogram(data, bins="auto", density=True)
-    bin_width = np.diff(bin_borders)
-    bin_center = bin_borders[:-1] + bin_width/2
-    coeffs = st.exponweib.fit(data)
-    mean, var = st.exponweib.stats(coeffs[0], coeffs[1], moments="mv")
-    print(mean, var)
 
-    data2 = get_data(np.array([5, 7]), np.array([[7, 2], [2, 18]]))
-    coeffs2 = st.exponweib.fit(data2)
-    mean1, var1 = st.exponweib.stats(coeffs2[0], coeffs2[1], moments="mv")
-    print(mean1, var1)
+def solve_chi_saddlepoint(mu, Sigma):
+    P = None
+    eigenvalues, eigenvectors = np.linalg.eig(Sigma)
+    if (eigenvectors == np.diag(eigenvalues)).all():
+        print("Diagonal matrix")
+        P = np.eye(len(mu))
+    else:
+        print("Non-diagonal matrix")
+        P = eigenvectors.T
+    Sigma_12 = np.linalg.cholesky(Sigma)
+    b = P @ Sigma_12 @ mu
+    x, t = sympy.symbols("x t")
+
+    # Cumulant function (symbolic computation)
+    # TODO Compute numerically as well
+    K = 0
+    for i, l in enumerate(eigenvalues):
+        K += (b[i] * l)/(1 - 2 * t * l) - 1/2 * sympy.ln(1 - 2 * l * t)
+    Kp = sympy.diff(K, t)
+    Kpp = sympy.diff(K, t, t)
+    s_hat = sympy.solve(Kp - x, t)[0]
+    # if len(s_hat) > 1:
+    #     for s in s_hat:
+    #         print("Need to check solutions")
+    f = 1 / sympy.sqrt(2 * sympy.pi * Kpp.subs(t, s_hat)) * sympy.exp(K.subs(t, s_hat) - s_hat * x)
+    print(sympy.latex(f))
+    fm = sympy.utilities.lambdify(x, f)
+    return fm
+
+
+if __name__ == "__main__":
+    # TODO Add subplots and theming
+    plt.style.use("seaborn-ticks")
+
+    fig, axes = plt.subplots(2, 1)
+    fig.tight_layout()
+    x_col = np.arange(0.1, 15, 0.1)
+
+    mu2 = np.array([0, 0])
+    Sigma2 = np.eye(len(mu2))
+    mu3 = np.array([0, 0, 0])
+    Sigma3 = np.eye(len(mu3))
+    x_col = np.arange(0.1, 15, 0.1)
+
+    f2 = solve_chi_saddlepoint(mu2, Sigma2)
+    data2 = get_data(mu2, Sigma2)
+
+    axes[0].plot(x_col, f2(x_col), label="saddlepoint approx.")
+    axes[0].hist(data2, bins=50, density=True, label="MC histogram")
+    axes[0].set_title("Error distribution in {}D".format(len(mu2)))
+    axes[0].set_xlabel("Magnitude (m)")
+    axes[0].set_ylabel("Probability")
+    axes[0].legend()
+
+    f3 = solve_chi_saddlepoint(mu3, Sigma3)
+    data3 = get_data(mu3, Sigma3)
+
+    axes[1].plot(x_col, f3(x_col), label="saddlepoint approx.")
+    axes[1].hist(data3, bins=50, density=True, label="MC histogram")
+    axes[1].set_title("Error distribution in {}D".format(len(mu3)))
+    axes[1].set_xlabel("Magnitude (m)")
+    axes[1].set_ylabel("Probability")
+    axes[1].legend()
+
+    plt.show()

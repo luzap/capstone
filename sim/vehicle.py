@@ -1,14 +1,8 @@
 #! /usr/bin/python3
 import numpy as np
-import matplotlib.pyplot as plt
-import matplotlib.animation
-from typing import List, Callable
-from collections import namedtuple
 
-# TODO At least test this today with the Kalman filter
 def vehicle_2d_process_model(x0, dt, vel: float, ang_vel: float, use_noise: bool
                              = False):
-        # TODO Figure out sensible error values based on the velocity
         e_v = np.random.normal(1.0, scale=vel*0.1) if not use_noise else 1.0
         e_a = np.random.normal(1.0, scale=vel*0.01) if not use_noise else 1.0
         translational_velocity = (vel * e_v) * np.array([np.cos(x0[2]),
