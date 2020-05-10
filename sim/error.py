@@ -16,6 +16,9 @@ def get_data(mu, Sigma, sample_num=10000):
 
 
 def solve_chi_saddlepoint(mu, Sigma):
+    """Compute the saddlepoint approximation for the generalized chi square distribution given a mean and a covariance matrix. Currently has two different ways of solving:
+        1. If the mean is close to zero, the system can be solved symbolically.
+        2. TODO If the mean is further away from zero, the system becomes more complex, and thus is more difficult to solve. Instead, we will either be using a non-linear solver, or the Taylor series expansion around the squared magnitude of the mean, as that is where we think it should be centered."""
     P = None
     eigenvalues, eigenvectors = np.linalg.eig(Sigma)
     if (eigenvectors == np.diag(eigenvalues)).all():
@@ -35,10 +38,9 @@ def solve_chi_saddlepoint(mu, Sigma):
         K += (b[i] * l)/(1 - 2 * t * l) - 1/2 * sympy.ln(1 - 2 * l * t)
     Kp = sympy.diff(K, t)
     Kpp = sympy.diff(K, t, t)
+    # TODO Handle the case with multiple \hat{s}
     s_hat = sympy.solve(Kp - x, t)[0]
-    # if len(s_hat) > 1:
-    #     for s in s_hat:
-    #         print("Need to check solutions")
+
     f = 1 / sympy.sqrt(2 * sympy.pi * Kpp.subs(t, s_hat)) * sympy.exp(K.subs(t, s_hat) - s_hat * x)
     print(sympy.latex(f))
     fm = sympy.utilities.lambdify(x, f)
