@@ -1,7 +1,7 @@
 #!/usr/bin/python3
 import numpy as np
 import sympy
-import scipy.optimize as scio
+from scipy import optimize, integrate
 import matplotlib.pyplot as plt
 import scipy.stats as st
 
@@ -32,19 +32,60 @@ def solve_chi_saddlepoint(mu, Sigma):
     x, t = sympy.symbols("x t")
 
     # Cumulant function (symbolic computation)
-    # TODO Compute numerically as well
     K = 0
     for i, l in enumerate(eigenvalues):
         K += (b[i] * l)/(1 - 2 * t * l) - 1/2 * sympy.ln(1 - 2 * l * t)
     Kp = sympy.diff(K, t)
     Kpp = sympy.diff(K, t, t)
-    # TODO Handle the case with multiple \hat{s}
-    s_hat = sympy.solve(Kp - x, t)[0]
 
-    f = 1 / sympy.sqrt(2 * sympy.pi * Kpp.subs(t, s_hat)) * sympy.exp(K.subs(t, s_hat) - s_hat * x)
-    print(sympy.latex(f))
-    fm = sympy.utilities.lambdify(x, f)
-    return fm
+    # If close to zero, the computation can be numeric
+    if np.linalg.norm(b) < 0.01:
+        s_hat = sympy.solve(Kp - x, t)[0]
+        f = 1 / sympy.sqrt(2 * sympy.pi * Kpp.subs(t, s_hat)) * sympy.exp(K.subs(t, s_hat) - s_hat * x)
+        return sympy.utilities.lambdify(x, f)
+    else:
+        saddles = sympy.utilities.lambdify(x, Kp)
+        dsaddles = sympy.utilites.lambdify(x, Kpp)
+        
+        # TODO What's the range?
+        xs = np.arange(0.1, 100, 0.1)
+        # TODO What does this return?
+        sols = optimize.fsolve(saddles - xs, np.dot(b, b))
+        # TODO What are the dimensions here
+        saddlepoints = np.zeros((2, len(xs)))
+        i = 0
+        for sol in sols:
+            if dsaddles(sol) > 0:
+                saddlepoints[i] = np.array([xs, sol])
+                i += 1
+
+    
+        # TODO How are we defininig this function so that it would look up the 
+        # appropriate saddlepoint
+        def approx(x):
+            return 
+
+        # TODO Test if this works    
+        c = integrate.quad(approx, 0, np.inf)
+
+        return (approx, c)
+
+# TODO While we don't 100% know where the distribution is at a minimum, 
+# we can guess based on the normal distribution, meaning that we are 
+# the most likely to have that the distance falls within two standard 
+# deviations in any direction. When viewed from the origin, we then have 
+# that the value closest to 0 is then the value that's two standard de
+# viations away on both coordinate axes
+def confidence_interval(distribution, normalizer, mean, covariance):
+    pass
+
+
+def test():
+    pass
+
+
+
+
 
 
 if __name__ == "__main__":
