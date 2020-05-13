@@ -1,6 +1,7 @@
 #!/usr/bin/python3
 # TODO Eventually get rid of this dependency
 import sympy
+import symengine as sym
 import functools
 import numpy as np
 import scipy.stats as st
@@ -24,63 +25,52 @@ def solve_chi_saddlepoint(mu, Sigma):
     P = None
     eigenvalues, eigenvectors = np.linalg.eig(Sigma)
     if (eigenvectors == np.diag(eigenvalues)).all():
-        print("Diagonal matrix")
         P = np.eye(len(mu))
     else:
-        print("Non-diagonal matrix")
+        print("Non-diagonal")
         P = eigenvectors.T
     Sigma_12 = np.linalg.cholesky(Sigma)
     b = P @ Sigma_12 @ mu
-    x, t = sympy.symbols("x t")
 
-    # Cumulant function (symbolic computation)
+    x = sym.Symbol("x")
+    t = sym.Symbol("t")
+
+    # Cumulant function
     K = 0
     for i, l in enumerate(eigenvalues):
-        K += (b[i] * l)/(1 - 2 * t * l) - 1/2 * sympy.ln(1 - 2 * l * t)
-    Kp = sympy.diff(K, t)
-    Kpp = sympy.diff(K, t, t)
+        K += (t * b[i] ** 2 * l)/(1 - 2 * t * l) - 1/2 * sym.log(1 - 2 * l * t)
 
-    # If close to zero, the computation can be numeric
-    if np.linalg.norm(b) < 0.01:
-        s_hat = sympy.solve(Kp - x, t)[0]
-        f = 1 / sympy.sqrt(2 * sympy.pi * Kpp.subs(t, s_hat)) * sympy.exp(K.subs(t, s_hat) - s_hat * x)
-        return sympy.utilities.lambdify(x, f)
+    Kp = sym.diff(K, t)
+    Kpp = sym.diff(K, t, t)
+
+    roots = sym.lib.symengine_wrapper.solve(sym.Eq(Kp, x), t).args
+    if len(roots) > 1:
+        for expr in roots:
+            trial = Kpp.subs(t, expr).subs(x, np.dot(b,b))
+            if trial >= 0.0:
+                s_hat = expr
     else:
-        saddles = sympy.utilities.lambdify(x, Kp)
-        dsaddles = sympy.utilites.lambdify(x, Kpp)
+        s_hat = roots[0]
 
-        # TODO What's the range?
-        xs = np.arange(0.1, 100, 0.1)
-        # TODO The estimate here is wrong. Try something by visual inspection, or do by root finding
-        sols = optimize.fsolve(saddles - xs, np.dot(b, b))
-        # TODO What are the dimensions here
-        saddlepoints = np.zeros((2, len(xs)))
-        i = 0
-        for sol in sols:
-            if dsaddles(sol) > 0:
-                saddlepoints[i] = np.array([xs, sol])
-                i += 1
+    f = 1 / sym.sqrt(2 * sym.pi * Kpp.subs(t, s_hat)) * sym.exp(K.subs(t, s_hat) - s_hat * x)
+    fp = sym.Lambdify(x, f)
+    c = integrate.quad(fp, 0, np.inf)[0]
 
-
-        # TODO How are we defininig this function so that it would look up the
-        # appropriate saddlepoint
-        def approx(x):
-            return
-
-        # TODO Test if this works
-        c = integrate.quad(approx, 0, np.inf)
-
-        return (approx, c)
+    return lambda x: 1/c * fp(x)
 
 
 def sample_distribution(fn, mu, sample_num):
     """Perform rejection sampling with a distribution fn. The `mu` is needed to
-    determine the interval over which we're sampling."""
+    determine the interval over which we're sampling.
+
+    Based on pages 83-84 of "Data Reduction and Error Analysis for the Physical
+    Sciences".
+    """
     xs = np.zeros(sample_num)
     # TODO We need to get an upper and lower bound. We can do this by interating
     # over the interval via binary search or we can set naive bounds
     uniform = functools.partial(np.random.uniform, low = np.dot(mu, mu)/4,
-                                high = 7/4 * np.dot(mu,mu), size=(sample_num, 2))
+                                high = 7/4 * np.dot(mu,mu), size=(sample_num*2, 2))
     X = uniform()
 
     # There is no good reason to prefer having an indexed loop, considering we don't
@@ -111,19 +101,20 @@ if __name__ == "__main__":
     fig.tight_layout()
     x_col = np.arange(0.1, 15, 0.1)
 
-    mu2 = np.array([0, 0])
+    mu2 = np.array([10, 5])
     Sigma2 = np.eye(len(mu2))
-    x_col = np.arange(0.1, 15, 0.1)
 
     f2 = solve_chi_saddlepoint(mu2, Sigma2)
     data2 = get_data(mu2, Sigma2)
+    x_col = np.arange(0.1, np.amax(data2), 0.1)
 
-    axes[0].plot(x_col, f2(x_col), label="saddlepoint approx.")
-    axes[0].hist(data2, bins=50, density=True, label="MC histogram")
-    axes[0].set_title("Error distribution in {}D".format(len(mu2)))
-    axes[0].set_xlabel("Magnitude (m)")
-    axes[0].set_ylabel("Probability")
-    axes[0].legend()
+
+    axes.plot(x_col, f2(x_col), label="saddlepoint approx.")
+    axes.hist(data2, bins=50, density=True, label="MC histogram")
+    axes.set_title("Error distribution in {}D".format(len(mu2)))
+    axes.set_xlabel("Magnitude (m)")
+    axes.set_ylabel("Probability")
+    axes.legend()
 
 
     plt.show()
