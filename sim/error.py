@@ -1,9 +1,11 @@
 #!/usr/bin/python3
-import numpy as np
+# TODO Eventually get rid of this dependency
 import sympy
-from scipy import optimize, integrate
-import matplotlib.pyplot as plt
+import functools
+import numpy as np
 import scipy.stats as st
+import matplotlib.pyplot as plt
+from scipy import optimize, integrate
 
 def get_data(mu, Sigma, sample_num=10000):
     """Sample the normal distribution defined by the given mu and Sigma. The default sample number
@@ -46,10 +48,10 @@ def solve_chi_saddlepoint(mu, Sigma):
     else:
         saddles = sympy.utilities.lambdify(x, Kp)
         dsaddles = sympy.utilites.lambdify(x, Kpp)
-        
+
         # TODO What's the range?
         xs = np.arange(0.1, 100, 0.1)
-        # TODO What does this return?
+        # TODO The estimate here is wrong. Try something by visual inspection, or do by root finding
         sols = optimize.fsolve(saddles - xs, np.dot(b, b))
         # TODO What are the dimensions here
         saddlepoints = np.zeros((2, len(xs)))
@@ -59,47 +61,58 @@ def solve_chi_saddlepoint(mu, Sigma):
                 saddlepoints[i] = np.array([xs, sol])
                 i += 1
 
-    
-        # TODO How are we defininig this function so that it would look up the 
+
+        # TODO How are we defininig this function so that it would look up the
         # appropriate saddlepoint
         def approx(x):
-            return 
+            return
 
-        # TODO Test if this works    
+        # TODO Test if this works
         c = integrate.quad(approx, 0, np.inf)
 
         return (approx, c)
 
-# TODO While we don't 100% know where the distribution is at a minimum, 
-# we can guess based on the normal distribution, meaning that we are 
-# the most likely to have that the distance falls within two standard 
-# deviations in any direction. When viewed from the origin, we then have 
-# that the value closest to 0 is then the value that's two standard de
-# viations away on both coordinate axes
-def confidence_interval(distribution, normalizer, mean, covariance):
-    pass
 
+def sample_distribution(fn, mu, sample_num):
+    """Perform rejection sampling with a distribution fn. The `mu` is needed to
+    determine the interval over which we're sampling."""
+    xs = np.zeros(sample_num)
+    # TODO We need to get an upper and lower bound. We can do this by interating
+    # over the interval via binary search or we can set naive bounds
+    uniform = functools.partial(np.random.uniform, low = np.dot(mu, mu)/4,
+                                high = 7/4 * np.dot(mu,mu), size=(sample_num, 2))
+    X = uniform()
 
-def test():
-    pass
+    # There is no good reason to prefer having an indexed loop, considering we don't
+    # a priori know much about the problem
+    while True:
+        # We're doing rejection sampling, so we take col 1: x; col 2: y,
+        # extracting all of the entries that satisfy the requirement, and then
+        # transposing that into a 1D array
+        samples = fn[fn(X[:, 0]) < X[:, 1]][:, 0].T
+        # Since we're only ever looking for `sample_num` samples, we need to reject
+        # everything that goes over that number. Therefore, we clamp the last index
+        # to the number of samples that we want
+        next_batch_index = min(sample_num, current_samples+len(samples))
+        xs[next_batch_index - len(samples): next_batch_index] = samples[:next_batch_index]
 
+        if next_batch_index == sample_num:
+            break
 
+        X = uniform()
 
-
+    return xs
 
 
 if __name__ == "__main__":
-    # TODO Add subplots and theming
     plt.style.use("seaborn-ticks")
 
-    fig, axes = plt.subplots(2, 1)
+    fig, axes = plt.subplots(1, 1)
     fig.tight_layout()
     x_col = np.arange(0.1, 15, 0.1)
 
     mu2 = np.array([0, 0])
     Sigma2 = np.eye(len(mu2))
-    mu3 = np.array([0, 0, 0])
-    Sigma3 = np.eye(len(mu3))
     x_col = np.arange(0.1, 15, 0.1)
 
     f2 = solve_chi_saddlepoint(mu2, Sigma2)
@@ -112,14 +125,5 @@ if __name__ == "__main__":
     axes[0].set_ylabel("Probability")
     axes[0].legend()
 
-    f3 = solve_chi_saddlepoint(mu3, Sigma3)
-    data3 = get_data(mu3, Sigma3)
-
-    axes[1].plot(x_col, f3(x_col), label="saddlepoint approx.")
-    axes[1].hist(data3, bins=50, density=True, label="MC histogram")
-    axes[1].set_title("Error distribution in {}D".format(len(mu3)))
-    axes[1].set_xlabel("Magnitude (m)")
-    axes[1].set_ylabel("Probability")
-    axes[1].legend()
 
     plt.show()
