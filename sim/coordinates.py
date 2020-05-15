@@ -1,10 +1,10 @@
-#! /usr/bin/python3 
+#! /usr/bin/python3
 import numpy as np
 
 # Semi-major axis
 a: float = 6378137.0 # m
 # Semi-minor axis
-b: float = 6356752.314140 # m 
+b: float = 6356752.314140 # m
 
 # Square of the first eccentricity of the ellipsoid
 e_2 = 1 - (b ** 2)/(a ** 2)
@@ -39,12 +39,3 @@ def ECEF_to_geodetic(x: float, y: float, z: float):
     h = np.hypot(z - b * np.sin(beta), Q - a * np.cos(beta))
 
     return (np.degrees(lat), np.degrees(long), h)
-
-
-if __name__ == "__main__":
-    coords = (24.522673, 54.434157, 0)
-    print(coords)
-    ecef = geodetic_to_ECEF(*coords)
-    print(ecef)
-    lla = ECEF_to_geodetic(*ecef)
-    print(lla)

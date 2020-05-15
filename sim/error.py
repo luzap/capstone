@@ -11,7 +11,7 @@ from scipy import optimize, integrate
 def get_data(mu, Sigma, sample_num=10000):
     """Sample the normal distribution defined by the given mu and Sigma. The default sample number
     may take a second or two to generate, but seems to give fairly close results."""
-    sums = np.zeros(sample_num)
+    sums = np.zeros(sample_num, dtype=np.longdouble)
     for i, _ in enumerate(sums):
         sample = np.random.multivariate_normal(mu, Sigma)
         sums[i] = np.dot(sample, sample.T)
@@ -20,8 +20,7 @@ def get_data(mu, Sigma, sample_num=10000):
 
 def solve_chi_saddlepoint(mu, Sigma):
     """Compute the saddlepoint approximation for the generalized chi square distribution given a mean and a covariance matrix. Currently has two different ways of solving:
-        1. If the mean is close to zero, the system can be solved symbolically.
-        2. TODO If the mean is further away from zero, the system becomes more complex, and thus is more difficult to solve. Instead, we will either be using a non-linear solver, or the Taylor series expansion around the squared magnitude of the mean, as that is where we think it should be centered."""
+        1. If the mean is close to zero, the system can be solved symbolically."""
     P = None
     eigenvalues, eigenvectors = np.linalg.eig(Sigma)
     if (eigenvectors == np.diag(eigenvalues)).all():
@@ -43,8 +42,6 @@ def solve_chi_saddlepoint(mu, Sigma):
     Kp = sym.diff(K, t).simplify()
     Kpp = sym.diff(K, t, t).simplify()
 
-    print(sym.latex(Kp))
-
     roots = sym.lib.symengine_wrapper.solve(sym.Eq(Kp, x), t).args
     if len(roots) > 1:
         for expr in roots:
@@ -58,9 +55,7 @@ def solve_chi_saddlepoint(mu, Sigma):
     fp = sym.Lambdify(x, f.simplify())
 
     c = integrate.quad(fp, 0, np.inf)[0]
-    if np.abs(c) < 1e-5:
-        c = 1
-
+    print(c)
     return lambda x: 1/c * fp(x)
 
 
@@ -89,7 +84,6 @@ def sample_distribution(fn, mu, sigma, sample_num):
         X = distribution()
         Y = unit()
 
-
     return np.asarray(xs)
 
 
@@ -97,26 +91,23 @@ if __name__ == "__main__":
     plt.style.use("seaborn-ticks")
 
     fig, axes = plt.subplots(1, 1)
-    fig.tight_layout()
+    # fig.tight_layout()
     x_col = np.arange(0.1, 15, 0.1)
 
     mu2 = np.array([10, 10])
-    Sigma2 = np.eye(len(mu2))
+    Sigma2 = 2*np.eye(len(mu2))
 
-    # f2 = solve_chi_saddlepoint(mu2, Sigma2)
-    # data2 = get_data(mu2, Sigma2)
-    # x_col = np.arange(0.1, np.amax(data2), 0.1)
+    f2 = solve_chi_saddlepoint(mu2, Sigma2)
+    data2 = get_data(mu2, Sigma2)
+    x_col = np.arange(0.1, np.amax(data2), 0.1, dtype=np.longdouble)
+    print(f2(x_col))
 
-    # axes.plot(x_col, f2(x_col), label="saddlepoint approx.")
-    # axes.hist(data2, bins=50, density=True, label="MC histogram")
-    # axes.set_title("Error distribution in {}D".format(len(mu2)))
-    # axes.set_xlabel("Magnitude (m)")
-    # axes.set_ylabel("Probability")
-    # axes.legend()
-
-    data = sample_distribution(st.norm.pdf, 0, 1, 100)
-
-    axes.hist(data)
+    axes.plot(x_col, f2(x_col), label="saddlepoint approx.")
+    axes.hist(data2, bins=50, density=True, label="MC histogram")
+    axes.set_title("Error distribution in {}D".format(len(mu2)))
+    axes.set_xlabel("Magnitude (m)")
+    axes.set_ylabel("Probability")
+    axes.legend()
 
 
     plt.show()
