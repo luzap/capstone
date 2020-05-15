@@ -26,7 +26,6 @@ def solve_chi_saddlepoint(mu, Sigma):
     if (eigenvectors == np.diag(eigenvalues)).all():
         P = np.eye(len(mu))
     else:
-        print("Non-diagonal")
         P = eigenvectors.T
     Sigma_12 = np.linalg.cholesky(Sigma)
     b = P @ Sigma_12 @ mu
@@ -55,7 +54,6 @@ def solve_chi_saddlepoint(mu, Sigma):
     fp = sym.Lambdify(x, f.simplify())
 
     c = integrate.quad(fp, 0, np.inf)[0]
-    print(c)
     return lambda x: 1/c * fp(x)
 
 
@@ -95,12 +93,11 @@ if __name__ == "__main__":
     x_col = np.arange(0.1, 15, 0.1)
 
     mu2 = np.array([10, 10])
-    Sigma2 = 2*np.eye(len(mu2))
+    Sigma2 = np.eye(len(mu2))
 
     f2 = solve_chi_saddlepoint(mu2, Sigma2)
     data2 = get_data(mu2, Sigma2)
     x_col = np.arange(0.1, np.amax(data2), 0.1, dtype=np.longdouble)
-    print(f2(x_col))
 
     axes.plot(x_col, f2(x_col), label="saddlepoint approx.")
     axes.hist(data2, bins=50, density=True, label="MC histogram")
