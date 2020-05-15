@@ -47,7 +47,7 @@ class UKFilter:
         self.state_res = state_residual
 
         # Measurement variables
-        self.R = R
+        self.R = R # Measurement noise
 
         # Measurement functions
         self.measurement = measurement_function
@@ -86,7 +86,6 @@ class UKFilter:
         h_sigmas = np.zeros((self.f_sigmas.shape[0], len(z)))
         for i, f_sigma in enumerate(self.f_sigmas):
             h_sigmas[i] = self.measurement(f_sigma, *args)
-        print(h_sigmas)
 
         z_prior, Pz = self.unscented_transform(h_sigmas, self.R, self.meas_mean,
                                                self.meas_res)
