@@ -40,8 +40,10 @@ def solve_chi_saddlepoint(mu, Sigma):
     for i, l in enumerate(eigenvalues):
         K += (t * b[i] ** 2 * l)/(1 - 2 * t * l) - 1/2 * sym.log(1 - 2 * l * t)
 
-    Kp = sym.diff(K, t)
-    Kpp = sym.diff(K, t, t)
+    Kp = sym.diff(K, t).simplify()
+    Kpp = sym.diff(K, t, t).simplify()
+
+    print(sym.latex(Kp))
 
     roots = sym.lib.symengine_wrapper.solve(sym.Eq(Kp, x), t).args
     if len(roots) > 1:
@@ -53,45 +55,42 @@ def solve_chi_saddlepoint(mu, Sigma):
         s_hat = roots[0]
 
     f = 1 / sym.sqrt(2 * sym.pi * Kpp.subs(t, s_hat)) * sym.exp(K.subs(t, s_hat) - s_hat * x)
-    fp = sym.Lambdify(x, f)
+    fp = sym.Lambdify(x, f.simplify())
+
     c = integrate.quad(fp, 0, np.inf)[0]
+    if np.abs(c) < 1e-5:
+        c = 1
 
     return lambda x: 1/c * fp(x)
 
 
-def sample_distribution(fn, mu, sample_num):
+def sample_distribution(fn, mu, sigma, sample_num):
     """Perform rejection sampling with a distribution fn. The `mu` is needed to
     determine the interval over which we're sampling.
 
     Based on pages 83-84 of "Data Reduction and Error Analysis for the Physical
     Sciences".
     """
-    xs = np.zeros(sample_num)
     # TODO We need to get an upper and lower bound. We can do this by interating
     # over the interval via binary search or we can set naive bounds
-    uniform = functools.partial(np.random.uniform, low = np.dot(mu, mu)/4,
-                                high = 7/4 * np.dot(mu,mu), size=(sample_num*2, 2))
-    X = uniform()
+    distribution = functools.partial(np.random.uniform, low = np.dot(mu, mu) - 2*sigma,
+                                high = np.dot(mu, mu) + 2*sigma, size=sample_num*2)
+    unit = functools.partial(np.random.uniform, low=0.0, high=1.0, size=sample_num*2)
+    X = distribution()
+    Y = unit()
 
-    # There is no good reason to prefer having an indexed loop, considering we don't
-    # a priori know much about the problem
-    while True:
-        # We're doing rejection sampling, so we take col 1: x; col 2: y,
-        # extracting all of the entries that satisfy the requirement, and then
-        # transposing that into a 1D array
-        samples = fn[fn(X[:, 0]) < X[:, 1]][:, 0].T
-        # Since we're only ever looking for `sample_num` samples, we need to reject
-        # everything that goes over that number. Therefore, we clamp the last index
-        # to the number of samples that we want
-        next_batch_index = min(sample_num, current_samples+len(samples))
-        xs[next_batch_index - len(samples): next_batch_index] = samples[:next_batch_index]
+    current = 0
+    xs = []
+    while current < sample_num:
+        samples = X[fn(X) > Y]
+        next_samples = min(len(samples), sample_num - current)
+        xs.extend(samples[:next_samples])
+        current += next_samples
+        X = distribution()
+        Y = unit()
 
-        if next_batch_index == sample_num:
-            break
 
-        X = uniform()
-
-    return xs
+    return np.asarray(xs)
 
 
 if __name__ == "__main__":
@@ -101,20 +100,23 @@ if __name__ == "__main__":
     fig.tight_layout()
     x_col = np.arange(0.1, 15, 0.1)
 
-    mu2 = np.array([10, 5])
+    mu2 = np.array([10, 10])
     Sigma2 = np.eye(len(mu2))
 
-    f2 = solve_chi_saddlepoint(mu2, Sigma2)
-    data2 = get_data(mu2, Sigma2)
-    x_col = np.arange(0.1, np.amax(data2), 0.1)
+    # f2 = solve_chi_saddlepoint(mu2, Sigma2)
+    # data2 = get_data(mu2, Sigma2)
+    # x_col = np.arange(0.1, np.amax(data2), 0.1)
 
+    # axes.plot(x_col, f2(x_col), label="saddlepoint approx.")
+    # axes.hist(data2, bins=50, density=True, label="MC histogram")
+    # axes.set_title("Error distribution in {}D".format(len(mu2)))
+    # axes.set_xlabel("Magnitude (m)")
+    # axes.set_ylabel("Probability")
+    # axes.legend()
 
-    axes.plot(x_col, f2(x_col), label="saddlepoint approx.")
-    axes.hist(data2, bins=50, density=True, label="MC histogram")
-    axes.set_title("Error distribution in {}D".format(len(mu2)))
-    axes.set_xlabel("Magnitude (m)")
-    axes.set_ylabel("Probability")
-    axes.legend()
+    data = sample_distribution(st.norm.pdf, 0, 1, 100)
+
+    axes.hist(data)
 
 
     plt.show()
