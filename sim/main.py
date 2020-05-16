@@ -64,7 +64,7 @@ if __name__ == "__main__":
 
     Gamma = np.array([0, 0, 0, 0, np.sqrt(dt)], dtype=np.longdouble) * 1
     Q = np.outer(Gamma, Gamma.T)
-    R = np.eye(2)
+    R = np.zeros((2, 2))
 
     vecs[0].self_estimator = kalman.UKFilter(vecs[0].state, vecs[0].error, Q, R, dt,
                                            vehicle.vehicle_2d_process_model,

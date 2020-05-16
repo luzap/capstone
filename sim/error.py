@@ -11,7 +11,7 @@ from scipy import optimize, integrate
 def get_data(mu, Sigma, sample_num=10000):
     """Sample the normal distribution defined by the given mu and Sigma. The default sample number
     may take a second or two to generate, but seems to give fairly close results."""
-    sums = np.zeros(sample_num, dtype=np.longdouble)
+    sums = np.zeros(sample_num)
     for i, _ in enumerate(sums):
         sample = np.random.multivariate_normal(mu, Sigma)
         sums[i] = np.dot(sample, sample.T)
@@ -56,19 +56,35 @@ def solve_chi_saddlepoint(mu, Sigma):
     c = integrate.quad(fp, 0, np.inf)[0]
     return lambda x: 1/c * fp(x)
 
+def get_hist_distr(mu, Sigma):
+    data = get_data(mu, Sigma)
+    hist, bin_edges = np.histogram(data, density=True)
 
-def sample_distribution(fn, mu, sigma, sample_num):
+    def f(x):
+        data = np.zeros(len(x))
+        ids = np.digitize(x, bin_edges)
+        for ind in ids:
+            if ind < (len(hist) - 1):
+                data[ind] = hist[ind]
+            else:
+                data[ind] = 0
+
+        return data
+
+    return (f, bin_edges[0], bin_edges[-1])
+
+
+def sample_distribution(fn, low, high, sample_num):
     """Perform rejection sampling with a distribution fn. The `mu` is needed to
     determine the interval over which we're sampling.
 
     Based on pages 83-84 of "Data Reduction and Error Analysis for the Physical
     Sciences".
     """
-    # TODO We need to get an upper and lower bound. We can do this by interating
-    # over the interval via binary search or we can set naive bounds
-    distribution = functools.partial(np.random.uniform, low = np.dot(mu, mu) - 2*sigma,
-                                high = np.dot(mu, mu) + 2*sigma, size=sample_num*2)
+    distribution = functools.partial(np.random.uniform, low=low,
+                                high=high, size=sample_num*2)
     unit = functools.partial(np.random.uniform, low=0.0, high=1.0, size=sample_num*2)
+
     X = distribution()
     Y = unit()
 
@@ -83,6 +99,23 @@ def sample_distribution(fn, mu, sigma, sample_num):
         Y = unit()
 
     return np.asarray(xs)
+
+
+# Based on the answers from https://stackoverflow.com/questions/17821458/random-number-from-histogram,
+# this offers a more robust way of handling sampling from a histogram
+def kde(x, x_grid, bandwidth=0.2, **kwargs):
+    """Kernel Density Estimation with Scipy"""
+    kde = st.gaussian_kde(x, bw_method=bandwidth / x.std(ddof=1), **kwargs)
+    return kde.evaluate(x_grid)
+
+
+def generate_rand_from_pdf(pdf, x_grid):
+    cdf = np.cumsum(pdf)
+    cdf = cdf / cdf[-1]
+    values = np.random.rand(1000)
+    value_bins = np.searchsorted(cdf, values)
+    random_from_cdf = x_grid[value_bins]
+    return random_from_cdf
 
 
 if __name__ == "__main__":
