@@ -64,6 +64,7 @@ class UKFilter:
 
     def predict(self, *args):
         # Create the sigma points dependent on the current mean
+        print(self.P)
         self.sigmas = calculate_sigma_points(self.mu, self.P)
 
         # Pass the sigma points through the process model to sample
