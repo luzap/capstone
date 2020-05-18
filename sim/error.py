@@ -125,19 +125,22 @@ if __name__ == "__main__":
     # fig.tight_layout()
     x_col = np.arange(0.1, 15, 0.1)
 
-    mu2 = np.array([10, 10])
+    mu2 = np.array([5, 1])
     Sigma2 = np.eye(len(mu2))
 
     f2 = solve_chi_saddlepoint(mu2, Sigma2)
     data2 = get_data(mu2, Sigma2)
     x_col = np.arange(0.1, np.amax(data2), 0.1, dtype=np.longdouble)
 
-    axes.plot(x_col, f2(x_col), label="saddlepoint approx.")
-    axes.hist(data2, bins=50, density=True, label="MC histogram")
+    mut = np.array([1, 0])
+    f = solve_chi_saddlepoint(mut, Sigma2)
+
+    axes.plot(x_col, f2(x_col))
+    axes.plot(x_col, f(x_col))
+
     axes.set_title("Error distribution in {}D".format(len(mu2)))
     axes.set_xlabel("Magnitude (m)")
     axes.set_ylabel("Probability")
-    axes.legend()
 
 
     plt.show()
